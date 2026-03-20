@@ -1,8 +1,7 @@
 """
 ================================================================================
   50 PYTHON CODE EXAMPLES — BEGINNER TO EXPERT
-  Professor's Teaching Reference File
-  
+   
   Organized into 5 tiers:
     TIER 1 (Examples  1–10): Beginner       — Core syntax, types, I/O
     TIER 2 (Examples 11–20): Beginner+      — Functions, loops, collections
@@ -11,7 +10,6 @@
     TIER 5 (Examples 41–50): Expert         — Concurrency, metaclasses, design patterns
 ================================================================================
 """
-
 
 # ==============================================================================
 # TIER 1 — BEGINNER (Examples 1–10)

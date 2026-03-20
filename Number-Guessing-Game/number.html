@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THE VAULT — A Number-Guessing Adventure</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --green: #39ff14;
+  --green-dim: #1a7a09;
+  --green-pale: #0d3b06;
+  --amber: #ffb300;
+  --red: #ff3c3c;
+  --bg: #020b02;
+  --scanline: rgba(0,0,0,0.12);
+}
+
+html,body {
+  height:100%;
+  background: var(--bg);
+  color: var(--green);
+  font-family: 'Share Tech Mono', monospace;
+  overflow: hidden;
+}
+
+/* CRT scanlines overlay */
+body::after {
+  content:'';
+  position:fixed;
+  inset:0;
+  background: repeating-linear-gradient(
+    0deg,
+    var(--scanline) 0px,
+    var(--scanline) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  pointer-events:none;
+  z-index:100;
+}
+
+/* Phosphor glow on text */
+.glow { text-shadow: 0 0 6px var(--green), 0 0 12px var(--green-dim); }
+.glow-amber { text-shadow: 0 0 6px var(--amber); color: var(--amber); }
+.glow-red { text-shadow: 0 0 6px var(--red); color: var(--red); }
+
+#app {
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+  max-width: 820px;
+  margin:0 auto;
+  padding: 0 1rem;
+}
+
+/* ── HEADER ── */
+#header {
+  padding: 1rem 0 0.5rem;
+  border-bottom: 1px solid var(--green-dim);
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  flex-shrink:0;
+}
+#title-block .title {
+  font-family:'VT323',monospace;
+  font-size:2.2rem;
+  line-height:1;
+  color: var(--green);
+  text-shadow: 0 0 10px var(--green), 0 0 30px var(--green-dim);
+  letter-spacing:0.06em;
+}
+#title-block .subtitle {
+  font-size:10px;
+  letter-spacing:0.25em;
+  color: var(--green-dim);
+  margin-top:2px;
+}
+#stats {
+  text-align:right;
+  font-size:11px;
+  color: var(--green-dim);
+  line-height:1.8;
+}
+#stats span { color: var(--green); }
+
+/* ── LOG WINDOW ── */
+#log-wrap {
+  flex:1;
+  overflow-y:auto;
+  padding: 0.75rem 0;
+  scrollbar-width:thin;
+  scrollbar-color: var(--green-dim) transparent;
+}
+#log-wrap::-webkit-scrollbar { width:4px; }
+#log-wrap::-webkit-scrollbar-thumb { background: var(--green-dim); border-radius:2px; }
+
+.log-line {
+  font-size:14px;
+  line-height:1.7;
+  padding:1px 0;
+  opacity:0;
+  animation: fadein 0.15s ease forwards;
+}
+@keyframes fadein { to { opacity:1; } }
+
+.log-line.system  { color: var(--green-dim); font-size:12px; }
+.log-line.narrate { color: #7dff60; }
+.log-line.player  { color: var(--amber); }
+.log-line.player::before { content:'> '; color: var(--green-dim); }
+.log-line.success { color: var(--green); font-family:'VT323',monospace; font-size:1.5rem; }
+.log-line.failure { color: var(--red);   font-family:'VT323',monospace; font-size:1.5rem; }
+.log-line.hint    { color: #2ecc71; font-style:italic; }
+.log-line.blank   { height:0.5rem; }
+.log-line.header  { color: var(--green); font-family:'VT323',monospace; font-size:1.4rem; border-bottom:1px solid var(--green-dim); margin-bottom:4px; }
+.log-line.warm    { color: #ff9500; }
+.log-line.cold    { color: #4ec9ff; }
+
+/* Progress bar */
+.progress-bar {
+  height:3px;
+  background: var(--green-pale);
+  border-radius:1px;
+  margin:4px 0;
+  overflow:hidden;
+}
+.progress-fill {
+  height:100%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  transition: width 0.4s ease;
+}
+
+/* ── INPUT ZONE ── */
+#input-zone {
+  border-top:1px solid var(--green-dim);
+  padding: 0.6rem 0 0.8rem;
+  flex-shrink:0;
+}
+
+#prompt-row {
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+#prompt-label {
+  font-size:13px;
+  color: var(--green-dim);
+  white-space:nowrap;
+}
+
+#guess-input {
+  flex:1;
+  background:transparent;
+  border:none;
+  outline:none;
+  color: var(--amber);
+  font-family:'Share Tech Mono',monospace;
+  font-size:16px;
+  caret-color: var(--green);
+  text-shadow: 0 0 4px var(--amber);
+}
+
+#guess-input::placeholder { color: var(--green-pale); }
+
+#submit-btn {
+  background:transparent;
+  border: 1px solid var(--green-dim);
+  color: var(--green);
+  font-family:'Share Tech Mono',monospace;
+  font-size:12px;
+  letter-spacing:0.1em;
+  padding:4px 14px;
+  cursor:pointer;
+  border-radius:2px;
+  transition: all 0.15s;
+}
+#submit-btn:hover {
+  background: var(--green-pale);
+  border-color: var(--green);
+  box-shadow: 0 0 8px var(--green-dim);
+}
+
+#hint-row {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-top:6px;
+}
+
+#range-display {
+  font-size:11px;
+  color: var(--green-dim);
+}
+#range-display span { color: var(--green); }
+
+.action-btns {
+  display:flex;
+  gap:8px;
+}
+
+.action-btn {
+  background:transparent;
+  border:1px solid var(--green-pale);
+  color: var(--green-dim);
+  font-family:'Share Tech Mono',monospace;
+  font-size:10px;
+  letter-spacing:0.08em;
+  padding:3px 10px;
+  cursor:pointer;
+  border-radius:2px;
+  transition:all 0.15s;
+}
+.action-btn:hover { border-color:var(--green-dim); color:var(--green); }
+.action-btn.danger:hover { border-color:var(--red); color:var(--red); }
+
+/* ── DIFFICULTY SCREEN ── */
+#diff-screen {
+  position:fixed;
+  inset:0;
+  background:var(--bg);
+  z-index:50;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:1.5rem;
+  padding:2rem;
+}
+
+#diff-screen .big-title {
+  font-family:'VT323',monospace;
+  font-size:4rem;
+  color:var(--green);
+  text-shadow:0 0 20px var(--green), 0 0 40px var(--green-dim);
+  text-align:center;
+  line-height:1;
+}
+#diff-screen .tagline {
+  font-size:12px;
+  letter-spacing:0.3em;
+  color:var(--green-dim);
+  text-align:center;
+}
+
+.diff-grid {
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+  width:100%;
+  max-width:640px;
+}
+
+.diff-card {
+  border:1px solid var(--green-dim);
+  border-radius:3px;
+  padding:1.2rem 0.8rem;
+  cursor:pointer;
+  text-align:center;
+  transition:all 0.2s;
+  background:transparent;
+  color:var(--green);
+  font-family:'Share Tech Mono',monospace;
+}
+.diff-card:hover {
+  background:var(--green-pale);
+  border-color:var(--green);
+  box-shadow:0 0 16px var(--green-dim);
+  transform:translateY(-2px);
+}
+.diff-card .d-name {
+  font-family:'VT323',monospace;
+  font-size:1.6rem;
+  display:block;
+  margin-bottom:4px;
+}
+.diff-card .d-range { font-size:10px; color:var(--green-dim); display:block; margin-bottom:6px; }
+.diff-card .d-lives { font-size:11px; color:var(--amber); display:block; margin-bottom:4px; }
+.diff-card .d-desc  { font-size:10px; color:var(--green-dim); display:block; line-height:1.5; }
+
+/* Victory / game over overlay */
+#overlay {
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(2,11,2,0.88);
+  z-index:60;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  gap:1rem;
+}
+#overlay.show { display:flex; }
+#overlay .ov-title {
+  font-family:'VT323',monospace;
+  font-size:5rem;
+  text-align:center;
+  line-height:1;
+}
+#overlay .ov-sub { font-size:13px; color:var(--green-dim); text-align:center; max-width:480px; line-height:1.8; }
+#overlay .ov-score { font-family:'VT323',monospace; font-size:2.5rem; color:var(--amber); text-shadow:0 0 10px var(--amber); }
+.ov-btns { display:flex; gap:12px; margin-top:0.5rem; }
+.ov-btn {
+  background:transparent;
+  border:1px solid currentColor;
+  font-family:'Share Tech Mono',monospace;
+  font-size:12px;
+  letter-spacing:0.1em;
+  padding:8px 24px;
+  cursor:pointer;
+  border-radius:2px;
+  transition:all 0.15s;
+}
+.ov-btn.primary { color:var(--green); }
+.ov-btn.primary:hover { background:var(--green-pale); box-shadow:0 0 12px var(--green-dim); }
+.ov-btn.secondary { color:var(--green-dim); }
+
+/* Blinking cursor */
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+.cursor { animation:blink 1s step-end infinite; }
+
+/* Shake on wrong */
+@keyframes shake {
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-6px)}
+  40%{transform:translateX(6px)}
+  60%{transform:translateX(-4px)}
+  80%{transform:translateX(4px)}
+}
+.shake { animation:shake 0.35s ease; }
+
+/* Flicker on win */
+@keyframes flicker {
+  0%,100%{opacity:1}10%{opacity:0.4}20%{opacity:0.9}30%{opacity:0.3}50%{opacity:1}70%{opacity:0.6}80%{opacity:1}
+}
+.flicker { animation:flicker 0.6s ease; }
+</style>
+</head>
+<body>
+
+<!-- DIFFICULTY SELECT -->
+<div id="diff-screen">
+  <div>
+    <div class="big-title">THE VAULT</div>
+    <div class="tagline glow" style="margin-top:0.5rem">▸ A NUMBER-GUESSING ADVENTURE ◂</div>
+  </div>
+  <div style="font-size:11px;letter-spacing:0.2em;color:var(--green-dim);text-align:center">CHOOSE YOUR CLEARANCE LEVEL</div>
+  <div class="diff-grid">
+    <button class="diff-card" onclick="startGame('novice')">
+      <span class="d-name">NOVICE</span>
+      <span class="d-range">1 – 50</span>
+      <span class="d-lives">♥ ♥ ♥ ♥ ♥ ♥ ♥ ♥ ♥ ♥</span>
+      <span class="d-desc">Training Simulation. Error is forgiven.</span>
+    </button>
+    <button class="diff-card" onclick="startGame('agent')">
+      <span class="d-name">AGENT</span>
+      <span class="d-range">1 – 100</span>
+      <span class="d-lives" style="color:#ffb300">♥ ♥ ♥ ♥ ♥ ♥ ♥</span>
+      <span class="d-desc">Field operative. Think before you act.</span>
+    </button>
+    <button class="diff-card" onclick="startGame('shadow')">
+      <span class="d-name">SHADOW</span>
+      <span class="d-range">1 – 200</span>
+      <span class="d-lives" style="color:#ff7700">♥ ♥ ♥ ♥ ♥</span>
+      <span class="d-desc">Elite operative. The Vault fights back.</span>
+    </button>
+    <button class="diff-card" onclick="startGame('ghost')">
+      <span class="d-name">GHOST</span>
+      <span class="d-range">1 – 500</span>
+      <span class="d-lives" style="color:#ff3c3c">♥ ♥ ♥</span>
+      <span class="d-desc">One wrong move and you cease to exist.</span>
+    </button>
+  </div>
+  <div style="font-size:10px;letter-spacing:0.15em;color:var(--green-pale);text-align:center;margin-top:-0.5rem">
+    SCORE = (correct guess) × MULTIPLIER − (guesses used × PENALTY)
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="app" style="display:none">
+  <div id="header">
+    <div id="title-block">
+      <div class="title glow">THE VAULT</div>
+      <div class="subtitle">OPERATIVE TERMINAL // SECURE CHANNEL</div>
+    </div>
+    <div id="stats">
+      LEVEL: <span id="s-level">—</span><br>
+      LIVES: <span id="s-lives">—</span><br>
+      GUESSES: <span id="s-guesses">—</span><br>
+      SCORE: <span id="s-score">0</span>
+    </div>
+  </div>
+
+  <div id="log-wrap"><div id="log"></div></div>
+
+  <div id="input-zone">
+    <div id="prompt-row">
+      <span id="prompt-label">ENTER CODE:</span>
+      <input id="guess-input" type="number" placeholder="type a number..." autocomplete="off" />
+      <button id="submit-btn" onclick="submitGuess()">TRANSMIT</button>
+    </div>
+    <div id="hint-row">
+      <div id="range-display">RANGE: <span id="r-lo">?</span> — <span id="r-hi">?</span></div>
+      <div class="action-btns">
+        <button class="action-btn" onclick="useScan()" id="btn-scan">⟳ SCAN (2 left)</button>
+        <button class="action-btn danger" onclick="abandonMission()">✕ ABORT</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- END OVERLAY -->
+<div id="overlay">
+  <div class="ov-title" id="ov-title"></div>
+  <div class="ov-score" id="ov-score"></div>
+  <div class="ov-sub" id="ov-sub"></div>
+  <div class="ov-btns">
+    <button class="ov-btn primary" onclick="location.reload()">▸ NEW GAME</button>
+  </div>
+</div>
+
+<script>
+// ── GAME STATE ──────────────────────────────────────────────────────────────
+const CONFIGS = {
+  novice: { min:1, max:50,  lives:10, mult:5,   penalty:3,  name:'NOVICE',  scanCost:0  },
+  agent:  { min:1, max:100, lives:7,  mult:10,  penalty:5,  name:'AGENT',   scanCost:0  },
+  shadow: { min:1, max:200, lives:5,  mult:20,  penalty:8,  name:'SHADOW',  scanCost:0  },
+  ghost:  { min:1, max:500, lives:3,  mult:50,  penalty:15, name:'GHOST',   scanCost:0  },
+};
+
+let G = {};
+let printQueue = [];
+let printing = false;
+let typeDelay = 18; // ms per char for typewriter
+
+// ── NARRATIVE BANKS ─────────────────────────────────────────────────────────
+const LORE_INTRO = [
+  "INITIATING SECURE LINK...",
+  "UPLINK ESTABLISHED. OPERATOR ONLINE.",
+  "",
+  "The Vault has been breached. Somewhere inside its labyrinthine security grid",
+  "a single access code has been randomised. Without it, the inner sanctum",
+  "remains sealed — and the mission fails.",
+  "",
+  "You have one tool: your mind. Transmit a code. The Vault will respond.",
+  "Too hot, too cold — you'll feel it. But every wrong guess drains your",
+  "operational window. Run dry and the Vault purges you from its records.",
+  "",
+  "Find the code. Get out alive.",
+  "",
+];
+
+const NARRATE_COLD = [
+  "Ice forms on the console. The Vault barely registers your attempt.",
+  "A cold silence. You're nowhere close — the code laughs at your guess.",
+  "The readout flickers: FAR BELOW THRESHOLD. Think bigger.",
+  "The temperature drops. You've barely scratched the outer grid.",
+  "Signal too weak. Way off course. Recalibrate, operative.",
+  "The Vault hums with indifference. Your probe was nowhere near.",
+];
+const NARRATE_COOL = [
+  "A faint resonance — closer, but the corridor is long.",
+  "The system stirs. You're in the right wing, but wrong room.",
+  "Mild response. The code is directionally near, but not near enough.",
+  "Warmer sector detected. You're hunting in the right quadrant.",
+  "The air shifts slightly. You're making progress.",
+];
+const NARRATE_WARM = [
+  "Alarms flicker. The Vault knows you're closing in.",
+  "Heat signature detected. The code pulses — you're nearby.",
+  "The grid is responding. A few more calibrations and you're through.",
+  "You can feel it now — the code is almost within reach.",
+  "The Vault tenses. Your probe is brushing the edge of the sequence.",
+];
+const NARRATE_HOT = [
+  "WARNING: PROXIMITY ALERT. The code is RIGHT THERE.",
+  "You're on the doorstep. One more calibrated move and it's over.",
+  "The console screams. You're within a single digit.",
+  "THERMAL LOCK IMMINENT. The code is practically whispering to you.",
+  "So close the air smells like burnt circuitry. Don't fumble now.",
+];
+
+const WIN_LINES = [
+  "ACCESS GRANTED. The inner sanctum opens. You've cracked the Vault.",
+  "CODE CONFIRMED. The grid dissolves. Mission complete, operative.",
+  "LOCK BROKEN. The Vault surrenders its secrets to you alone.",
+  "SEQUENCE ACCEPTED. The door swings wide. You are clear.",
+];
+const LOSE_LINES = [
+  "OPERATIVE TERMINATED. The Vault has purged your credentials.",
+  "SYSTEM LOCKOUT. You've exhausted your access window. The code dies with the mission.",
+  "VAULT SEALED. Too many wrong transmissions. The grid collapses around you.",
+];
+
+const CLOSE_RANKS = [
+  "It was {n} all along. {d} away from glory.",
+  "The answer was {n}. You were {d} short of cracking it.",
+  "{n} — {d} digit(s) between you and victory.",
+];
+
+function pick(arr) { return arr[Math.floor(Math.random()*arr.length)]; }
+
+// ── PRINT ENGINE ─────────────────────────────────────────────────────────────
+function log(text='', cls='narrate', delay=0) {
+  printQueue.push({text, cls, delay});
+  if (!printing) drainQueue();
+}
+
+function drainQueue() {
+  if (!printQueue.length) { printing=false; return; }
+  printing=true;
+  const {text,cls,delay} = printQueue.shift();
+  setTimeout(() => {
+    appendLine(text, cls);
+    drainQueue();
+  }, delay);
+}
+
+function appendLine(text, cls) {
+  const wrap = document.getElementById('log-wrap');
+  const logEl = document.getElementById('log');
+  if (text === '') { const b=document.createElement('div'); b.className='log-line blank'; logEl.appendChild(b); wrap.scrollTop=wrap.scrollHeight; return; }
+  const div = document.createElement('div');
+  div.className = 'log-line ' + cls;
+  logEl.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+
+  // Typewriter for narrative
+  if (cls==='narrate'||cls==='system'||cls==='hint'||cls==='warm'||cls==='cold') {
+    let i=0;
+    const iv = setInterval(()=>{
+      div.textContent = text.slice(0,i+1);
+      i++;
+      wrap.scrollTop=wrap.scrollHeight;
+      if (i>=text.length) clearInterval(iv);
+    }, typeDelay);
+  } else {
+    div.textContent = text;
+  }
+}
+
+function logBlank(d=0) { log('','blank',d); }
+
+// ── GAME LOGIC ───────────────────────────────────────────────────────────────
+function startGame(difficulty) {
+  const cfg = CONFIGS[difficulty];
+  const secret = Math.floor(Math.random()*(cfg.max-cfg.min+1))+cfg.min;
+  G = {
+    secret, cfg, difficulty,
+    lives: cfg.lives,
+    maxLives: cfg.lives,
+    guesses: 0,
+    score: 0,
+    lo: cfg.min,
+    hi: cfg.max,
+    scans: 2,
+    over: false,
+    won: false,
+    guessHistory: [],
+  };
+
+  document.getElementById('diff-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  updateStats();
+  updateRange();
+  updateScanBtn();
+
+  let d=0;
+  for (const line of LORE_INTRO) { log(line,'narrate',d); d+=line?320:80; }
+  log(`DIFFICULTY SET: ${cfg.name.toUpperCase()}`,'system',d); d+=120;
+  log(`TARGET RANGE: ${cfg.min} — ${cfg.max}`,'system',d); d+=120;
+  log(`OPERATIONAL WINDOW: ${cfg.lives} attempts`,'system',d); d+=120;
+  logBlank(d); d+=80;
+  log(`Your move, operative. Transmit your first code.`,'hint',d);
+
+  setTimeout(()=>{document.getElementById('guess-input').focus();},d+400);
+
+  document.getElementById('guess-input').addEventListener('keydown', e=>{
+    if(e.key==='Enter') submitGuess();
+  });
+}
+
+function submitGuess() {
+  if (G.over) return;
+  const inp = document.getElementById('guess-input');
+  const raw = inp.value.trim();
+  inp.value='';
+  if (!raw) return;
+  const n = parseInt(raw,10);
+  if (isNaN(n)||n<G.cfg.min||n>G.cfg.max) {
+    log(`INVALID TRANSMISSION: ${raw} — enter a number between ${G.cfg.min} and ${G.cfg.max}`,'system');
+    logBlank();
+    shakeInput();
+    return;
+  }
+
+  G.guesses++;
+  G.guessHistory.push(n);
+  log(`> ${n}`,'player');
+
+  if (n===G.secret) {
+    handleWin();
+  } else {
+    G.lives--;
+    const diff = Math.abs(n-G.secret);
+    const range = G.cfg.max-G.cfg.min;
+    const pct = diff/range;
+    const dir = n<G.secret ? '▲ HIGHER' : '▼ LOWER';
+
+    // Update known bounds
+    if (n<G.secret) G.lo = Math.max(G.lo, n+1);
+    else            G.hi = Math.min(G.hi, n-1);
+    updateRange();
+
+    // Temperature narrative
+    let tempClass='narrate', narr;
+    if (pct>0.40)      { narr=pick(NARRATE_COLD); tempClass='cold'; }
+    else if (pct>0.20) { narr=pick(NARRATE_COOL); tempClass='narrate'; }
+    else if (pct>0.06) { narr=pick(NARRATE_WARM); tempClass='warm'; }
+    else               { narr=pick(NARRATE_HOT);  tempClass='warm'; }
+
+    logBlank();
+    log(narr, tempClass);
+    log(`SIGNAL: ${dir}   |   DELTA: ±${diff}   |   WINDOW: ${G.lives}/${G.maxLives}`, 'system');
+    logBlank();
+
+    // Progress bar visual in log
+    renderProgressBar();
+
+    if (G.lives<=0) handleLose();
+    else {
+      // Tension escalation
+      if (G.lives===2) log(`⚠  WARNING: CRITICAL WINDOW. 2 attempts remain.`,'warm');
+      if (G.lives===1) log(`⚠⚠ FINAL ATTEMPT. One shot left. Do not fail.`,'warm');
+      updateStats();
+    }
+  }
+  shakeInput();
+}
+
+function renderProgressBar() {
+  const logEl = document.getElementById('log');
+  const wrap  = document.getElementById('log-wrap');
+  const pct = G.lives/G.maxLives;
+  const div=document.createElement('div');
+  div.className='log-line';
+  div.innerHTML=`<div class="progress-bar" style="width:100%;margin:4px 0"><div class="progress-fill" style="width:${Math.round(pct*100)}%;background:${pct>0.5?'var(--green)':pct>0.25?'var(--amber)':'var(--red)'}"></div></div>`;
+  logEl.appendChild(div);
+  wrap.scrollTop=wrap.scrollHeight;
+}
+
+function handleWin() {
+  G.over=true; G.won=true;
+  const bonus = G.cfg.mult * G.cfg.max;
+  const pen   = G.guesses * G.cfg.penalty * 10;
+  const livesBonus = G.lives * 20;
+  G.score = Math.max(0, bonus - pen + livesBonus);
+
+  logBlank();
+  log(pick(WIN_LINES),'success');
+  logBlank();
+  log(`THE CODE WAS: ${G.secret}`,'header');
+  log(`GUESSES USED: ${G.guesses}  |  LIVES REMAINING: ${G.lives}/${G.maxLives}`,'system');
+  log(`SCORE: ${G.score}`,'system');
+  logBlank();
+  updateStats();
+
+  setTimeout(()=>{
+    const ov = document.getElementById('overlay');
+    document.getElementById('ov-title').textContent='ACCESS GRANTED';
+    document.getElementById('ov-title').className='ov-title glow';
+    document.getElementById('ov-score').textContent=`SCORE: ${G.score}`;
+    document.getElementById('ov-sub').textContent=
+      `The code was ${G.secret}. You cracked it in ${G.guesses} guess${G.guesses!==1?'es':''} with ${G.lives} life ${G.lives!==1?'lives':'life'} to spare. Difficulty: ${G.cfg.name}.`;
+    ov.classList.add('show');
+    ov.querySelector('.ov-title').classList.add('flicker');
+  }, 1200);
+}
+
+function handleLose() {
+  G.over=true;
+  const best = G.guessHistory.reduce((a,b)=>Math.abs(a-G.secret)<Math.abs(b-G.secret)?a:b, G.guessHistory[0]);
+  const bestDiff = Math.abs(best-G.secret);
+
+  logBlank();
+  log(pick(LOSE_LINES),'failure');
+  logBlank();
+  log(`THE CODE WAS: ${G.secret}`,'header');
+  const closeLine = pick(CLOSE_RANKS).replace('{n}',G.secret).replace('{d}',bestDiff);
+  log(closeLine,'system');
+  updateStats();
+
+  setTimeout(()=>{
+    const ov=document.getElementById('overlay');
+    document.getElementById('ov-title').textContent='VAULT SEALED';
+    document.getElementById('ov-title').className='ov-title glow-red';
+    document.getElementById('ov-score').textContent='SCORE: 0';
+    document.getElementById('ov-sub').textContent=
+      `The code was ${G.secret}. Your closest guess was ${best} — only ${bestDiff} away. The Vault remembers nothing. Difficulty: ${G.cfg.name}.`;
+    ov.classList.add('show');
+  }, 1200);
+}
+
+function useScan() {
+  if (G.over||G.scans<=0) return;
+  G.scans--;
+  // Reveal whether secret is in lower or upper half of current range
+  const mid = Math.floor((G.lo+G.hi)/2);
+  const zone = G.secret<=mid ? `${G.lo}–${mid}` : `${mid+1}–${G.hi}`;
+  logBlank();
+  log(`⟳ DEEP SCAN INITIATED...`,'system');
+  setTimeout(()=>{
+    log(`SCAN RESULT: Target resides in sector ${zone}.`,'hint');
+    log(`Scans remaining: ${G.scans}`,'system');
+    logBlank();
+  },600);
+  updateScanBtn();
+}
+
+function abandonMission() {
+  if (G.over) return;
+  G.over=true;
+  logBlank();
+  log(`MISSION ABORTED. The code was ${G.secret}.`,'failure');
+  logBlank();
+  setTimeout(()=>{
+    const ov=document.getElementById('overlay');
+    document.getElementById('ov-title').textContent='MISSION ABORTED';
+    document.getElementById('ov-title').className='ov-title glow-amber';
+    document.getElementById('ov-score').textContent='SCORE: 0';
+    document.getElementById('ov-sub').textContent=`You walked away. The code was ${G.secret}. Maybe next time you'll stay the course.`;
+    ov.classList.add('show');
+  },800);
+}
+
+// ── UI HELPERS ────────────────────────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('s-level').textContent  = G.cfg.name;
+  document.getElementById('s-lives').textContent  = '♥'.repeat(G.lives)+'♡'.repeat(Math.max(0,G.maxLives-G.lives));
+  document.getElementById('s-guesses').textContent= G.guesses;
+  document.getElementById('s-score').textContent  = G.score;
+}
+
+function updateRange() {
+  document.getElementById('r-lo').textContent = G.lo;
+  document.getElementById('r-hi').textContent = G.hi;
+}
+
+function updateScanBtn() {
+  const btn=document.getElementById('btn-scan');
+  btn.textContent=`⟳ SCAN (${G.scans} left)`;
+  btn.disabled=G.scans<=0;
+  btn.style.opacity=G.scans<=0?'0.3':'1';
+}
+
+function shakeInput() {
+  const inp=document.getElementById('guess-input');
+  inp.classList.remove('shake');
+  void inp.offsetWidth;
+  inp.classList.add('shake');
+  setTimeout(()=>inp.classList.remove('shake'),400);
+  inp.focus();
+}
+</script>
+</body>
+</html>
